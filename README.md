@@ -1,4 +1,4 @@
-# DataOps: Churn Analysis & Engagement
+# Churn Navigator: Churn Analysis & Engagement
 
 DataOps is a platform created to demonstrate how to predict and reduce customer churn. This repository outlines an end-to-end solution leveraging modern data and AI tools, plus minimal-code automation.
 
