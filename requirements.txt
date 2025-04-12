@@ -2,3 +2,5 @@ pandas
 pymongo
 json
 matplotlib
+sns
+np
