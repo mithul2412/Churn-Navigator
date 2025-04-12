@@ -45,6 +45,11 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 
 ---
 
+## Data Description
+
+- link: https://webpages.charlotte.edu/mirsad/itcs6265/group1/domain.html
+- kaggle download link: https://www.kaggle.com/datasets/marceloventura/the-berka-dataset 
+
 ## Contributing
 Contributions are welcome! Feel free to open issues or submit pull requests to improve the workflows, add new data integrations, or enhance model performance.
 
