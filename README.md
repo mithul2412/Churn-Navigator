@@ -41,7 +41,6 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 
 ### 5. Automation & Notifications
 - **n8n/Zapier** workflows notify customer success teams or send personalized emails when churn risk is high.  
-- Continuous monitoring with **Prometheus/Grafana** to detect performance issues or model drift.
 
 ---
 
