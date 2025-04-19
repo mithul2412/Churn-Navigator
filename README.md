@@ -15,17 +15,17 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 - **Airflow** to orchestrate data pipelines and model training schedules.  
 - **FastAPI** to serve real-time churn predictions via a REST API.  
 - **Docker & Kubernetes** for containerization and deployment at scale.  
-- **n8n / Zapier** to automate data ingestion and user notifications without heavy coding.
+- **n8n** to automate data ingestion and user notifications without heavy coding.
 
 ---
 
 ## Key Components
 
 ### 1. Data Ingestion
-- Payment logs from Stripe/PayPal.  
+- Data from Customer Chern Dataset.
 - User activity logs (e.g., course progress, quiz completions).  
 - Support tickets, survey results, and other engagement data.  
-- Automated workflows (**n8n/Zapier**) to pull data from SaaS tools into MongoDB.
+- Automated workflows (**n8n**) to pull data from SaaS tools into MongoDB.
 
 ### 2. Data Processing & Feature Engineering
 - **Spark jobs** (triggered by Airflow) clean and aggregate data.  
@@ -40,14 +40,13 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 - Deployed on Kubernetes for auto-scaling and reliable real-time inference.
 
 ### 5. Automation & Notifications
-- **n8n/Zapier** workflows notify customer success teams or send personalized emails when churn risk is high.  
+- **n8n** workflows notify customer success teams or send personalized emails when churn risk is high.  
 
 ---
 
 ## Data Description
 
-- link: https://webpages.charlotte.edu/mirsad/itcs6265/group1/domain.html
-- kaggle download link: https://www.kaggle.com/datasets/marceloventura/the-berka-dataset 
+- kaggle download link: https://www.kaggle.com/datasets/blastchar/telco-customer-churn?resource=download 
 
 ## Contributing
 Contributions are welcome! Feel free to open issues or submit pull requests to improve the workflows, add new data integrations, or enhance model performance.
