@@ -16,3 +16,4 @@ airflow/logs/
 
 # n8n
 data_ingest/workflows/.cache/
+.venv/
