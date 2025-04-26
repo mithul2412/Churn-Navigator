@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+mlflow-skinny>=2.0.0,<3.0.0 # Pin mlflow version range if desired
+scikit-learn
+xgboost
+pandas
+numpy

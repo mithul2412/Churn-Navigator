@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/0/bfc645575d0f48208e0a0e63afec1ae0/artifacts
+deleted_time: 1745630125130
+end_time: 1745627890000
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: deleted
+run_id: bfc645575d0f48208e0a0e63afec1ae0
+run_name: agreeable-worm-434
+run_uuid: bfc645575d0f48208e0a0e63afec1ae0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1745627889918
+status: 4
+tags: []
+user_id: buvkaushik

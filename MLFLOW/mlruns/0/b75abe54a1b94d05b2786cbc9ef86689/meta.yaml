@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/0/b75abe54a1b94d05b2786cbc9ef86689/artifacts
+end_time: 1745628327856
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: b75abe54a1b94d05b2786cbc9ef86689
+run_name: wistful-rat-362
+run_uuid: b75abe54a1b94d05b2786cbc9ef86689
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1745628320418
+status: 3
+tags: []
+user_id: buvkaushik
