@@ -1,0 +1,11 @@
+pymongo[srv]       # MongoDB client
+pyspark            # Spark
+mlflow             # Experiment tracking
+scikit-learn       # Baseline models
+xgboost            # Optional booster
+fastapi            # Serving API
+uvicorn            # ASGI server
+pandas             # Dataframes
+numpy              
+python-dotenv      # Manage ENV vars
+requests           # HTTP calls

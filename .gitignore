@@ -1,0 +1,18 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# Docker
+*.log
+.env
+
+# Airflow
+airflow/airflow.db
+airflow/logs/
+
+# n8n
+data_ingest/workflows/.cache/

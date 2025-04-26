@@ -1,0 +1,93 @@
+version: '3.7'
+
+services:
+  # ──── MongoDB ──────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:6
+    container_name: churn_mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: changeme
+    volumes:
+      - mongo_data:/data/db
+
+  # ──── Spark Master ─────────────────────────────────────────────────────────
+  spark-master:
+    image: bitnami/spark:3.3.2
+    container_name: spark-master
+    environment:
+      # run in "master" mode
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      # MongoDB Spark Connector
+      - SPARK_EXTENSIONS=org.apache.spark.sql.mongodb.MongoSparkSessionExtension
+      - SPARK_PACKAGES=org.mongodb.spark:mongo-spark-connector_2.12:10.1.1
+    ports:
+      - "7077:7077"    # Spark master RPC
+      - "8081:8080"    # Spark master web UI
+    volumes:
+      - ./etl:/etl    # your feature_engineering.py lives here
+      - ./data:/data  # where train/test parquet get written
+
+  # ──── Spark Worker ─────────────────────────────────────────────────────────
+  spark-worker:
+    image: bitnami/spark:3.3.2
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+
+  # ──── Airflow ──────────────────────────────────────────────────────────────
+  airflow:
+    image: apache/airflow:2.8.0
+    container_name: churn_airflow
+    restart: always
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      # point the SparkSubmitOperator spark_default connection here:
+      AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./etl:/etl             # mount your ETL scripts
+      - ./data:/data           # mount Parquet output
+    ports:
+      - "8080:8080"
+    command: webserver
+    depends_on:
+      - spark-master
+      - spark-worker
+      - mongo
+
+  # ──── n8n ───────────────────────────────────────────────────────────────────
+  n8n:
+    build:
+      context: ./n8n-custom
+      dockerfile: Dockerfile
+    image: n8nio/n8n:latest
+    container_name: churn_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      # for your Function node’s MongoClient
+      - MONGODB_URI=mongodb://admin:changeme@mongo:27017/churndb?authSource=admin
+      # n8n’s own DB (workflow store)
+      - N8N_DATABASE_TYPE=mongodb
+      - N8N_DATABASE_MONGODB_CONNECTION_URL=mongodb://admin:changeme@mongo:27017/churndb
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=changeme
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    depends_on:
+      - mongo
+    volumes:
+      - ./data:/data                 # your CSV / Parquet folder
+      - ./n8n_data:/home/node/.n8n   # persist n8n’s workflows & creds
+
+volumes:
+  mongo_data:
