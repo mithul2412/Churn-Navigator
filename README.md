@@ -40,7 +40,7 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 - Deployed on Kubernetes for auto-scaling and reliable real-time inference.
 
 ### 5. Automation & Notifications
-- **n8n** workflows notify customer success teams or send personalized emails when churn risk is high.  
+- **n8n** workflows notify customer success teams or send personalized emails when churn risk is high through LLM agents.  
 
 ---
 
