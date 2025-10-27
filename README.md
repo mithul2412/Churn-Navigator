@@ -14,7 +14,7 @@ Churn Navigator is a platform created to demonstrate how to predict and reduce c
 - **Apache Spark** for scalable data processing and feature engineering.  
 - **Airflow** to orchestrate data pipelines and model training schedules.  
 - **FastAPI** to serve real-time churn predictions via a REST API.  
-- **Docker & Kubernetes** for containerization and deployment at scale.  
+- **Docker** for containerization and deployment at scale.  
 - **n8n** to automate data ingestion and user notifications without heavy coding.
 
 ---
