@@ -9,10 +9,16 @@ __pycache__/
 # Docker
 *.log
 .env
+mlruns/
+artifacts/
+logs/
+data/processed/
 
 # Airflow
 airflow/airflow.db
 airflow/logs/
+airflow/__pycache__/
 
 # n8n
 data_ingest/workflows/.cache/
+n8n_data/database.sqlite
