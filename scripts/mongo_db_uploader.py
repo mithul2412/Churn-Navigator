@@ -1,56 +1,56 @@
+import argparse
+from typing import Iterable
+
 import pandas as pd
 from pymongo import MongoClient
-import os
 
-# Define file path - update this to your actual path
-DATA_PATH = "data/Churn_dataset.csv"
+try:
+    from config import DATA_PATH, MONGO_COLLECTION, MONGO_DB, MONGO_URI
+except ImportError:
+    from scripts.config import DATA_PATH, MONGO_COLLECTION, MONGO_DB, MONGO_URI
 
-def upload_to_mongodb():
-    try:
-        # Replace this with your MongoDB Atlas connection string
-        connection_string = "mongodb+srv://churn:churn@telco.l9welj0.mongodb.net/"
-        
-        # Connect to MongoDB Atlas
-        client = MongoClient(connection_string)
-        
-        # Create or access database
-        db = client['churn']
-        
-        # Create or access collection
-        collection = db['customer_churn']
-        
-        # Check if CSV file exists
-        if not os.path.exists(DATA_PATH):
-            print(f"Error: File not found at {DATA_PATH}")
-            return
-            
-        # Load CSV file
-        print(f"Loading data from {DATA_PATH}...")
-        df = pd.read_csv(DATA_PATH)
-        
-        # Convert SeniorCitizen from 0/1 to No/Yes for consistency
-        df['SeniorCitizen'] = df['SeniorCitizen'].map({0: 'No', 1: 'Yes'})
-        
-        # Convert TotalCharges to float (handling any non-numeric values)
-        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-        
-        # Convert DataFrame to list of dictionaries
-        records = df.to_dict('records')
-        
-        # Insert data into MongoDB
-        print(f"Uploading {len(records)} records to MongoDB Atlas...")
-        result = collection.insert_many(records)
-        
-        print(f"Upload complete. Inserted {len(result.inserted_ids)} documents.")
-        
-        # Create indexes for common query fields
-        collection.create_index("customerID")
-        collection.create_index("Churn")
-        
-        print("Created indexes on customerID and Churn fields.")
-        
-    except Exception as e:
-        print(f"Error: {e}")
+
+def load_churn_dataframe(data_path: str) -> pd.DataFrame:
+    df = pd.read_csv(data_path)
+    df["SeniorCitizen"] = df["SeniorCitizen"].map({0: "No", 1: "Yes"}).fillna(df["SeniorCitizen"])
+    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce").fillna(0.0)
+    return df
+
+
+def upload_to_mongodb(data_path: str, drop_existing: bool = False) -> int:
+    df = load_churn_dataframe(data_path)
+
+    client = MongoClient(MONGO_URI)
+    collection = client[MONGO_DB][MONGO_COLLECTION]
+
+    if drop_existing:
+        collection.delete_many({})
+
+    records: Iterable[dict] = df.to_dict("records")
+    result = collection.insert_many(list(records))
+
+    collection.create_index("customerID")
+    collection.create_index("Churn")
+
+    return len(result.inserted_ids)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Upload churn CSV data to MongoDB")
+    parser.add_argument("--data-path", default=DATA_PATH, help="Path to churn dataset CSV")
+    parser.add_argument(
+        "--drop-existing",
+        action="store_true",
+        help="Clear existing records in the target collection before upload",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    inserted = upload_to_mongodb(args.data_path, drop_existing=args.drop_existing)
+    print(f"Uploaded {inserted} rows to {MONGO_DB}.{MONGO_COLLECTION}")
+
 
 if __name__ == "__main__":
-    upload_to_mongodb()
+    main()
