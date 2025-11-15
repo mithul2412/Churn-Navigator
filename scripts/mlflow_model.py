@@ -1,102 +1,135 @@
-import os
+import argparse
+from pathlib import Path
+
 import mlflow
 import mlflow.sklearn
-import pyarrow.parquet as pq
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
+from sklearn.model_selection import train_test_split
 
-# Set MLflow tracking URI - can be local or remote
-mlflow.set_tracking_uri("file:///home/stlp/mlflow")
-mlflow.set_experiment("Churn Prediction")
+try:
+    from config import (
+        MLFLOW_EXPERIMENT,
+        MLFLOW_TRACKING_URI,
+        MODEL_ARTIFACT_PATH,
+        SPARK_OUTPUT_PATH,
+    )
+except ImportError:
+    from scripts.config import (
+        MLFLOW_EXPERIMENT,
+        MLFLOW_TRACKING_URI,
+        MODEL_ARTIFACT_PATH,
+        SPARK_OUTPUT_PATH,
+    )
 
-# Load the transformed data
-data_path = "/home/stlp/spark_output/transformed_churn_data"
-print(f"Loading data from {data_path}")
-table = pq.read_table(data_path)
-df = table.to_pandas()
 
-# Extract features and label
-print("Preparing features and target")
+def _to_feature_vector(value) -> np.ndarray:
+    if isinstance(value, np.ndarray):
+        return value.astype(float)
+    if isinstance(value, list):
+        return np.asarray(value, dtype=float)
+    if isinstance(value, tuple):
+        return np.asarray(list(value), dtype=float)
+    raise TypeError(f"Unsupported feature format: {type(value)}")
 
-# Convert dictionary features to numpy arrays
-def extract_features(feature_dict):
-    # For sparse vectors, we'll create a dense representation
-    # This assumes your feature vector has a fixed size (44 in your case)
-    size = 44  # Based on your data
-    features = np.zeros(size)
-    
-    # Check if it's a dictionary or already a numeric type
-    if isinstance(feature_dict, dict):
-        # Get indices and values from the sparse vector
-        indices = feature_dict.get('indices', [])
-        values = feature_dict.get('values', []) if 'values' in feature_dict else [1.0] * len(indices)
-        
-        # Fill the dense vector
-        for idx, val in zip(indices, values):
-            if idx < size:
-                features[idx] = val
-    else:
-        # If it's already numeric, just return it
-        return feature_dict
-        
-    return features
 
-# Apply the feature extraction to each row
-X = np.array([extract_features(feat) for feat in df["features"]])
-y = df["label"].values
-customer_ids = df["customerID"].values
+def load_training_data(data_path: str):
+    df = pd.read_parquet(data_path)
+    if "features" not in df.columns or "label" not in df.columns:
+        raise ValueError("Input parquet must contain 'features' and 'label' columns")
 
-# Split data
-X_train, X_test, y_train, y_test, ids_train, ids_test = train_test_split(
-    X, y, customer_ids, test_size=0.2, random_state=42
-)
+    x = np.vstack(df["features"].apply(_to_feature_vector).to_numpy())
+    y = df["label"].astype(int).to_numpy()
+    customer_ids = (
+        df["customerID"].astype(str).to_numpy()
+        if "customerID" in df.columns
+        else np.arange(len(df)).astype(str)
+    )
+    return x, y, customer_ids
 
-# Start MLflow run
-with mlflow.start_run(run_name="RandomForest_Churn_Model"):
-    # Train model
-    print("Training Random Forest model")
-    rf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
-    rf.fit(X_train, y_train)
-    
-    # Predictions
-    y_pred = rf.predict(X_test)
-    y_prob = rf.predict_proba(X_test)[:, 1]
-    
-    # Calculate metrics
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred)
-    recall = recall_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred)
-    roc_auc = roc_auc_score(y_test, y_prob)
-    
-    # Log parameters
-    mlflow.log_param("n_estimators", 100)
-    mlflow.log_param("max_depth", 10)
-    
-    # Log metrics
-    mlflow.log_metric("accuracy", accuracy)
-    mlflow.log_metric("precision", precision)
-    mlflow.log_metric("recall", recall)
-    mlflow.log_metric("f1", f1)
-    mlflow.log_metric("roc_auc", roc_auc)
-    
-    # Log model
-    mlflow.sklearn.log_model(rf, "random_forest_model")
-    
-    # Save predictions for sample customers
-    results_df = pd.DataFrame({
-        'customerID': ids_test,
-        'actual_churn': y_test,
-        'predicted_churn': y_pred,
-        'churn_probability': y_prob
-    })
-    results_path = "/home/stlp/mlflow/predictions.csv"
-    os.makedirs(os.path.dirname(results_path), exist_ok=True)  # Ensure directory exists
-    results_df.head(100).to_csv(results_path, index=False)
-    mlflow.log_artifact(results_path)
-    
-    print(f"Model training completed with accuracy: {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc:.4f}")
+
+def train_and_log_model(data_path: str, artifacts_dir: str, random_state: int = 42) -> str:
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT)
+
+    x, y, customer_ids = load_training_data(data_path)
+    stratify = y if len(np.unique(y)) > 1 else None
+
+    x_train, x_test, y_train, y_test, ids_train, ids_test = train_test_split(
+        x,
+        y,
+        customer_ids,
+        test_size=0.2,
+        random_state=random_state,
+        stratify=stratify,
+    )
+
+    with mlflow.start_run(run_name="random_forest_churn_model") as run:
+        model = RandomForestClassifier(
+            n_estimators=200,
+            max_depth=12,
+            min_samples_leaf=2,
+            random_state=random_state,
+        )
+        model.fit(x_train, y_train)
+
+        y_pred = model.predict(x_test)
+        y_prob = model.predict_proba(x_test)[:, 1] if hasattr(model, "predict_proba") else y_pred
+
+        metrics = {
+            "accuracy": accuracy_score(y_test, y_pred),
+            "precision": precision_score(y_test, y_pred, zero_division=0),
+            "recall": recall_score(y_test, y_pred, zero_division=0),
+            "f1": f1_score(y_test, y_pred, zero_division=0),
+        }
+        if len(np.unique(y_test)) > 1:
+            metrics["roc_auc"] = roc_auc_score(y_test, y_prob)
+
+        mlflow.log_params(
+            {
+                "n_estimators": 200,
+                "max_depth": 12,
+                "min_samples_leaf": 2,
+                "train_rows": len(x_train),
+                "test_rows": len(x_test),
+            }
+        )
+        mlflow.log_metrics(metrics)
+        mlflow.sklearn.log_model(model, artifact_path=MODEL_ARTIFACT_PATH)
+
+        output_dir = Path(artifacts_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        predictions_path = output_dir / "predictions_sample.csv"
+        pd.DataFrame(
+            {
+                "customerID": ids_test,
+                "actual_churn": y_test,
+                "predicted_churn": y_pred,
+                "churn_probability": y_prob,
+            }
+        ).head(200).to_csv(predictions_path, index=False)
+        mlflow.log_artifact(str(predictions_path), artifact_path="predictions")
+
+        print(f"Run ID: {run.info.run_id}")
+        for metric_name, metric_value in metrics.items():
+            print(f"{metric_name}: {metric_value:.4f}")
+
+        return run.info.run_id
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train churn model and log metrics/model in MLflow")
+    parser.add_argument("--data-path", default=SPARK_OUTPUT_PATH)
+    parser.add_argument("--artifacts-dir", default="artifacts")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    train_and_log_model(args.data_path, args.artifacts_dir)
+
+
+if __name__ == "__main__":
+    main()
