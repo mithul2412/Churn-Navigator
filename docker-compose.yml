@@ -1,7 +1,6 @@
-version: '3.7'
+version: "3.8"
 
 services:
-  # ──── MongoDB ──────────────────────────────────────────────────────────────
   mongo:
     image: mongo:6
     container_name: churn_mongo
@@ -13,58 +12,114 @@ services:
     volumes:
       - mongo_data:/data/db
 
-  # ──── Spark Master ─────────────────────────────────────────────────────────
   spark-master:
     image: bitnami/spark:3.3.2
     container_name: spark-master
     environment:
-      # run in "master" mode
-      - SPARK_MODE=master
-      - SPARK_MASTER_HOST=spark-master
-      # MongoDB Spark Connector
-      - SPARK_EXTENSIONS=org.apache.spark.sql.mongodb.MongoSparkSessionExtension
-      - SPARK_PACKAGES=org.mongodb.spark:mongo-spark-connector_2.12:10.1.1
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_PACKAGES: org.mongodb.spark:mongo-spark-connector_2.12:10.3.0
     ports:
-      - "7077:7077"    # Spark master RPC
-      - "8081:8080"    # Spark master web UI
+      - "7077:7077"
+      - "8081:8080"
     volumes:
-      - ./etl:/etl    # your feature_engineering.py lives here
-      - ./data:/data  # where train/test parquet get written
+      - ./:/opt/churn-navigator
+      - ./etl:/etl
+      - ./data:/data
 
-  # ──── Spark Worker ─────────────────────────────────────────────────────────
   spark-worker:
     image: bitnami/spark:3.3.2
     container_name: spark-worker
     depends_on:
       - spark-master
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
 
-  # ──── Airflow ──────────────────────────────────────────────────────────────
-  airflow:
+  airflow-init:
     image: apache/airflow:2.8.0
-    container_name: churn_airflow
-    restart: always
-    environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      # point the SparkSubmitOperator spark_default connection here:
-      AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./etl:/etl             # mount your ETL scripts
-      - ./data:/data           # mount Parquet output
-    ports:
-      - "8080:8080"
-    command: webserver
+    container_name: churn_airflow_init
     depends_on:
       - spark-master
       - spark-worker
       - mongo
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
+      CHURN_PROJECT_ROOT: /opt/churn-navigator
+      PYTHONPATH: /opt/churn-navigator/scripts
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+    volumes:
+      - ./:/opt/churn-navigator
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow_data:/opt/airflow
+      - ./data:/data
+    command: >
+      bash -c "
+      pip install --no-cache-dir -r /opt/churn-navigator/requirements.txt &&
+      airflow db migrate &&
+      airflow users create
+      --username $${_AIRFLOW_WWW_USER_USERNAME}
+      --password $${_AIRFLOW_WWW_USER_PASSWORD}
+      --firstname Churn
+      --lastname Admin
+      --role Admin
+      --email admin@example.com || true
+      "
 
-  # ──── n8n ───────────────────────────────────────────────────────────────────
+  airflow-webserver:
+    image: apache/airflow:2.8.0
+    container_name: churn_airflow_web
+    restart: always
+    depends_on:
+      - airflow-init
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
+      CHURN_PROJECT_ROOT: /opt/churn-navigator
+      PYTHONPATH: /opt/churn-navigator/scripts
+    volumes:
+      - ./:/opt/churn-navigator
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow_data:/opt/airflow
+      - ./data:/data
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      pip install --no-cache-dir -r /opt/churn-navigator/requirements.txt &&
+      airflow webserver
+      "
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.0
+    container_name: churn_airflow_scheduler
+    restart: always
+    depends_on:
+      - airflow-init
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
+      CHURN_PROJECT_ROOT: /opt/churn-navigator
+      PYTHONPATH: /opt/churn-navigator/scripts
+    volumes:
+      - ./:/opt/churn-navigator
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow_data:/opt/airflow
+      - ./data:/data
+    command: >
+      bash -c "
+      pip install --no-cache-dir -r /opt/churn-navigator/requirements.txt &&
+      airflow scheduler
+      "
+
   n8n:
     build:
       context: ./n8n-custom
@@ -74,20 +129,19 @@ services:
     ports:
       - "5678:5678"
     environment:
-      # for your Function node’s MongoClient
-      - MONGODB_URI=mongodb://admin:changeme@mongo:27017/churndb?authSource=admin
-      # n8n’s own DB (workflow store)
-      - N8N_DATABASE_TYPE=mongodb
-      - N8N_DATABASE_MONGODB_CONNECTION_URL=mongodb://admin:changeme@mongo:27017/churndb
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=changeme
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      MONGODB_URI: mongodb://admin:changeme@mongo:27017/churn?authSource=admin
+      N8N_DATABASE_TYPE: mongodb
+      N8N_DATABASE_MONGODB_CONNECTION_URL: mongodb://admin:changeme@mongo:27017/churn?authSource=admin
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: changeme
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
     depends_on:
       - mongo
     volumes:
-      - ./data:/data                 # your CSV / Parquet folder
-      - ./n8n_data:/home/node/.n8n   # persist n8n’s workflows & creds
+      - ./data:/data
+      - ./n8n_data:/home/node/.n8n
 
 volumes:
   mongo_data:
+  airflow_data:
