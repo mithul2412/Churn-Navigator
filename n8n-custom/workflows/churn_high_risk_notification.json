@@ -1,0 +1,121 @@
+{
+  "name": "Churn High Risk Notification",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ManualTrigger_1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "churn_probability",
+              "value": 0.82
+            }
+          ],
+          "string": [
+            {
+              "name": "customer_id",
+              "value": "7590-VHVEG"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "Set_1",
+      "name": "Sample Prediction",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        460,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json[\"churn_probability\"]}}",
+              "operation": "larger",
+              "value2": 0.7
+            }
+          ]
+        }
+      },
+      "id": "If_1",
+      "name": "High Risk?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        700,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://example.internal/alerts/churn",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"customer_id\": $json.customer_id,\n  \"churn_probability\": $json.churn_probability,\n  \"message\": \"Customer is at high churn risk\"\n}"
+      },
+      "id": "HTTP_1",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        940,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sample Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Prediction": {
+      "main": [
+        [
+          {
+            "node": "High Risk?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Risk?": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
