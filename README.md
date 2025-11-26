@@ -1,57 +1,128 @@
-# Churn Navigator: Churn Analysis & Engagement
+# Churn Navigator: Churn Analysis and Engagement
 
-Churn Navigator is a platform created to demonstrate how to predict and reduce customer churn. This repository outlines an end-to-end solution leveraging modern data and AI tools, plus minimal-code automation.
+Churn Navigator is an end-to-end churn prediction project that combines MongoDB, Spark, Airflow, MLflow, FastAPI, Docker, and n8n.
 
----
+## What Was Completed
 
-## Overview
+The repository now includes the missing runtime pieces required by the description:
+- Environment-driven configuration via `scripts/config.py` and `.env.example`
+- Missing Spark ETL entrypoint `etl/feature_engineering.py` used by Airflow/Docker
+- Refactored scripts without hardcoded local machine paths
+- Airflow DAGs aligned to repository paths
+- n8n sample workflow JSON for churn-risk notifications
+- Updated Docker Compose and project documentation
 
-**Goal**: Monitor and predict user churn, then take proactive steps (e.g., sending personalized offers) to retain subscribers.
+## Project Structure
 
-### Architecture Highlights
+- `data/Churn_dataset.csv`: source dataset
+- `scripts/mongo_db_uploader.py`: upload and clean CSV data into MongoDB
+- `scripts/spark_transformation.py`: Spark feature transformation from MongoDB to Parquet
+- `scripts/mlflow_model.py`: model training + MLflow logging
+- `scripts/register_mlflow_model.py`: register best MLflow run
+- `scripts/churn_api.py`: FastAPI inference service
+- `scripts/config.py`: shared environment configuration
+- `etl/feature_engineering.py`: Spark ETL job generating train/test parquet outputs
+- `airflow/dags/*.py`: orchestration DAGs
+- `n8n-custom/workflows/churn_high_risk_notification.json`: sample workflow export
+- `docker-compose.yml`: local stack orchestration
 
-- **MongoDB** for storing raw user activity and subscription data.  
-- **Apache Spark** for scalable data processing and feature engineering.  
-- **Airflow** to orchestrate data pipelines and model training schedules.  
-- **FastAPI** to serve real-time churn predictions via a REST API.  
-- **Docker** for containerization and deployment at scale.  
-- **n8n** to automate data ingestion and user notifications without heavy coding.
+## Data Source
 
----
+- Kaggle: [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn?resource=download)
 
-## Key Components
+## Local Setup
 
-### 1. Data Ingestion
-- Data from Customer Chern Dataset.
-- User activity logs (e.g., course progress, quiz completions).  
-- Support tickets, survey results, and other engagement data.  
-- Automated workflows (**n8n**) to pull data from SaaS tools into MongoDB.
+1. Create and activate a virtual environment.
+2. Install dependencies:
 
-### 2. Data Processing & Feature Engineering
-- **Spark jobs** (triggered by Airflow) clean and aggregate data.  
-- Feature sets (e.g., average session length, quiz scores, time since last login) stored for modeling.
+```bash
+pip install -r requirements.txt
+```
 
-### 3. Model Training & Tracking
-- **Churn prediction model** (Logistic Regression, Random Forest, or XGBoost) trained in scheduled Airflow tasks.  
-- **MLflow** (optional) for experiment tracking and model versioning.
+3. Copy and edit environment config:
 
-### 4. Model Serving
-- **FastAPI** microservice wrapped in Docker.  
-- Deployed on Kubernetes for auto-scaling and reliable real-time inference.
+```bash
+cp .env.example .env
+```
 
-### 5. Automation & Notifications
-- **n8n** workflows notify customer success teams or send personalized emails when churn risk is high through LLM agents.  
+4. Verify key values in `.env`:
+- `MONGO_URI`
+- `MONGO_DB`
+- `MONGO_COLLECTION`
+- `SPARK_OUTPUT_PATH`
+- `MLFLOW_TRACKING_URI`
 
----
+## Run Pipeline Scripts (Without Airflow)
 
-## Data Description
+1. Upload raw data to MongoDB:
 
-- kaggle download link: https://www.kaggle.com/datasets/blastchar/telco-customer-churn?resource=download 
+```bash
+python scripts/mongo_db_uploader.py --drop-existing
+```
 
-## Contributing
-Contributions are welcome! Feel free to open issues or submit pull requests to improve the workflows, add new data integrations, or enhance model performance.
+2. Build transformed feature parquet with Spark:
+
+```bash
+python scripts/spark_transformation.py
+```
+
+3. Train model and log artifacts to MLflow:
+
+```bash
+python scripts/mlflow_model.py
+```
+
+4. Register best run as model:
+
+```bash
+python scripts/register_mlflow_model.py
+```
+
+5. Start API server:
+
+```bash
+python scripts/churn_api.py
+```
+
+API endpoints:
+- `GET /health`
+- `POST /predict`
+
+Sample request body:
+
+```json
+{
+  "customer_id": "7590-VHVEG",
+  "features": [0.0, 1.0, 0.0, 0.0, 1.0]
+}
+```
+
+Note: feature vector length must match the trained model input dimension.
+
+## Run with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Services:
+- MongoDB: `localhost:27017`
+- Spark master UI: `localhost:8081`
+- Airflow UI: `localhost:8080` (admin/admin)
+- n8n: `localhost:5678` (admin/changeme)
+
+## Airflow DAGs
+
+- `churn_data_upload`: uploads source CSV into MongoDB
+- `churn_spark_transformation`: Spark feature transformation
+- `churn_prediction_pipeline`: transform -> train -> register
+- `churn_prediction_pipeline_with_api`: transform -> train -> register -> start API
+- `feature_engineering`: SparkSubmit ETL job writing `/data/train_features.parquet` and `/data/test_features.parquet`
+
+## n8n Workflow
+
+Import `n8n-custom/workflows/churn_high_risk_notification.json` inside n8n to bootstrap a high-risk churn alert flow.
 
 ## License
+
 This project is licensed under the MIT License.
-
-
