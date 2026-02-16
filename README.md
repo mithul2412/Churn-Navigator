@@ -32,7 +32,7 @@ The repository now includes the missing runtime pieces required by the descripti
 
 ## Local Setup
 
-1. Create and activate a virtual environment.
+1. Create and activate virtual environment.
 2. Install dependencies:
 
 ```bash
