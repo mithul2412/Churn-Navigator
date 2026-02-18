@@ -2,16 +2,6 @@
 
 Churn Navigator is an end-to-end churn prediction project that combines MongoDB, Spark, Airflow, MLflow, FastAPI, Docker, and n8n.
 
-## What Was Completed
-
-The repository now includes the missing runtime pieces required by the description:
-- Environment-driven configuration via `scripts/config.py` and `.env.example`
-- Missing Spark ETL entrypoint `etl/feature_engineering.py` used by Airflow/Docker
-- Refactored scripts without hardcoded local machine paths
-- Airflow DAGs aligned to repository paths
-- n8n sample workflow JSON for churn-risk notifications
-- Updated Docker Compose and project documentation
-
 ## Project Structure
 
 - `data/Churn_dataset.csv`: source dataset
